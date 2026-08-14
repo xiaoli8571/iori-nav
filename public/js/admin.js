@@ -5,6 +5,14 @@ const nextPageBtn = document.getElementById('nextPage');
 const currentPageSpan = document.getElementById('currentPage');
 const totalPagesSpan = document.getElementById('totalPages');
 
+// 图标加载失败兜底：<img onerror> 调用，替换为首字母占位块（textContent 防注入）
+window.adminLogoFallback = function(el, letter, cls) {
+  var d = document.createElement('div');
+  d.className = cls || 'w-10 h-10 rounded-lg bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-lg';
+  d.textContent = letter;
+  el.replaceWith(d);
+};
+
 const pendingTableBody = document.getElementById('pendingTableBody');
 const pendingPrevPageBtn = document.getElementById('pendingPrevPage');
 const pendingNextPageBtn = document.getElementById('pendingNextPage');
@@ -511,11 +519,12 @@ function renderPendingConfigs(configs) {
     const safeUrl = window.escapeHTML(config.url);
     const safeDesc = window.escapeHTML(config.desc);
     const safeCatalog = window.escapeHTML(config.catelog || config.catelog_name || '未分类');
+    const rowInitial = (() => { const c = ((config.name || '').trim().charAt(0) || '站').toUpperCase(); return /[A-Za-z0-9\u4e00-\u9fff]/.test(c) ? c : '站'; })();
     tr.innerHTML = `
       <td class="p-3 border-b">${config.id}</td>
       <td class="p-3 border-b">${window.escapeHTML(config.name)}</td>
       <td class="p-3 border-b truncate max-w-[200px]" title="${safeUrl}">${safeUrl}</td>
-      <td class="p-3 border-b">${config.logo ? `<img src="${window.escapeHTML(window.normalizeUrl(config.logo))}" class="w-8 h-8 rounded">` : '无'}</td>
+      <td class="p-3 border-b">${config.logo ? `<img src="${window.escapeHTML(window.normalizeUrl(config.logo))}" class="w-8 h-8 rounded" onerror="adminLogoFallback(this,'${rowInitial}','w-8 h-8 rounded bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-sm')">` : '无'}</td>
       <td class="p-3 border-b max-w-[200px] truncate" title="${safeDesc}">${safeDesc}</td>
       <td class="p-3 border-b">${safeCatalog}</td>
       <td class="p-3 border-b">
@@ -713,7 +722,9 @@ function renderConfig(configs) {
     const normalizedLogo = window.normalizeUrl(config.logo);
     const descCell = config.desc ? window.escapeHTML(config.desc) : '暂无描述';
     const safeCatalog = window.escapeHTML(config.catelog_name || '未分类');
-    const cardInitial = (safeName.charAt(0) || '站').toUpperCase();
+    const cardInitialRaw = ((config.name || '').trim().charAt(0) || '站').toUpperCase();
+    const cardInitial = window.escapeHTML(cardInitialRaw);
+    const cardInitialJs = /[A-Za-z0-9\u4e00-\u9fff]/.test(cardInitialRaw) ? cardInitialRaw : '站';
     
     // Private Icon
     const privateIcon = config.is_private ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 ml-1 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="私密书签"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>` : '';
@@ -730,7 +741,7 @@ function renderConfig(configs) {
 
     let logoHtml = '';
     if (normalizedLogo) {
-      logoHtml = `<img src="${window.escapeHTML(normalizedLogo)}" alt="${safeName}" class="w-full h-full rounded-lg object-cover bg-gray-50">`;
+      logoHtml = `<img src="${window.escapeHTML(normalizedLogo)}" alt="${safeName}" class="w-full h-full rounded-lg object-cover bg-gray-50" onerror="adminLogoFallback(this,'${cardInitialJs}')">`;
     } else {
       logoHtml = `<div class="w-full h-full rounded-lg bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-lg">${cardInitial}</div>`;
     }

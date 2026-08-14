@@ -41,11 +41,16 @@ export function renderSiteCards(sites, settings) {
       safeDisplayUrl: normalizedUrl || '未提供链接',
       logoUrl: sanitizeUrl(site.logo),
       cardInitial: escapeHTML((rawName.trim().charAt(0) || '站').toUpperCase()),
+      // onerror 内嵌 JS 字符串上下文使用的首字母：仅保留安全字符，避免引号破坏属性
+      cardInitialJs: (() => {
+        const c = (rawName.trim().charAt(0) || '站').toUpperCase();
+        return /[A-Za-z0-9\u4e00-\u9fff]/.test(c) ? c : '站';
+      })(),
       hasValidUrl: Boolean(normalizedUrl),
     };
   });
 
-  return processed.map(({ site, safeName, safeCatalog, safeDesc, normalizedUrl, safeUrl, safeDisplayUrl, logoUrl, cardInitial, hasValidUrl }, index) => {
+  return processed.map(({ site, safeName, safeCatalog, safeDesc, normalizedUrl, safeUrl, safeDisplayUrl, logoUrl, cardInitial, cardInitialJs, hasValidUrl }, index) => {
     // 首屏（约前 8 张）logo 用 eager + fetchpriority=high 改善 LCP；其余 lazy
     const isAboveFold = index < 8;
     const imgLoadingAttrs = isAboveFold ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"';
@@ -74,7 +79,7 @@ export function renderSiteCards(sites, settings) {
             <div class="flex items-start">
               <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
                 ${logoUrl
-        ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" ${imgLoadingAttrs}>`
+        ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" ${imgLoadingAttrs} onerror="iconFallback(this,'${cardInitialJs}')">`
         : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
       }
               </div>

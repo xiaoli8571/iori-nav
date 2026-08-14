@@ -714,11 +714,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const safeDisplayUrl = escapeHTML(normalizedUrl || '未提供链接');
       const logoUrl = sanitizeHttpUrl(site.logo);
       const cardInitial = escapeHTML((rawName.trim().charAt(0) || '站').toUpperCase());
+      const cardInitialJs = (() => { const c = (rawName.trim().charAt(0) || '站').toUpperCase(); return /[A-Za-z0-9\u4e00-\u9fff]/.test(c) ? c : '站'; })();
 
       const isAboveFold = index < 8;
       const imgLoadingAttrs = isAboveFold ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"';
       const logoHtml = logoUrl
-        ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" ${imgLoadingAttrs}>`
+        ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" ${imgLoadingAttrs} onerror="iconFallback(this,'${cardInitialJs}')">`
         : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`;
 
       const descHtml = hideDesc ? '' : `<p class="mt-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2" title="${safeDesc}">${safeDesc}</p>`;

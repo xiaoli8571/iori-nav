@@ -176,7 +176,8 @@ export function buildFaviconUrl(siteUrl, currentLogo, iconAPI) {
     if (currentLogo && !currentLogo.startsWith('data:image')) return currentLogo;
     if (!siteUrl || !(siteUrl.startsWith('https://') || siteUrl.startsWith('http://'))) return currentLogo || null;
     try {
-        const domain = new URL(siteUrl).host;
+        // 用 hostname 而非 host：host 会保留端口（如 hy.815720.xyz:4096），favicon 服务无法解析
+        const domain = new URL(siteUrl).hostname;
         return `${iconAPI}${domain}`;
     } catch {
         return currentLogo || null;

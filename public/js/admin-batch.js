@@ -207,7 +207,7 @@ function renderBatchTable(data) {
         const isChecked = batchSelectedIds.has(item.id);
         if (!isChecked) allSelected = false;
 
-        const logoHtml = item.logo ? `<img src="${window.escapeHTML(window.normalizeUrl(item.logo))}" class="w-6 h-6 rounded object-cover">` : '<span class="w-6 h-6 bg-gray-200 rounded block"></span>';
+        const logoHtml = item.logo ? `<img src="${window.escapeHTML(window.normalizeUrl(item.logo))}" class="w-6 h-6 rounded object-cover" onerror="this.style.visibility='hidden'">` : '<span class="w-6 h-6 bg-gray-200 rounded block"></span>';
         
         tr.innerHTML = `
             <td class="p-3 text-center">
