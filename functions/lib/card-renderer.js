@@ -22,8 +22,8 @@ export function renderSiteCards(sites, settings) {
   const frostedClass = enableFrostedGlass ? 'frosted-glass-effect' : '';
   const cardStyleClass = cardStyle === 'style2' ? 'style-2' : '';
   const baseCardClass = enableFrostedGlass
-    ? 'site-card group h-full flex flex-col overflow-hidden transition-all'
-    : 'site-card group h-full flex flex-col bg-white border border-primary-100/60 shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-700';
+    ? 'site-card group relative h-full flex flex-col overflow-hidden transition-all'
+    : 'site-card group relative h-full flex flex-col bg-white border border-primary-100/60 shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-700';
   const numericGridCols = Number(gridCols) || 4;
   const hideCopyText = numericGridCols >= 5;
 
@@ -72,6 +72,12 @@ export function renderSiteCards(sites, settings) {
         ${safeCatalog}
       </span>`;
 
+    // 常用收藏按钮（状态由前端 main.js 根据 localStorage 回填，SSR 只输出骨架）
+    const favBtnHtml = `
+      <button type="button" class="fav-btn" data-fav-id="${escapeHTML(String(site.id))}" aria-pressed="false" aria-label="收藏常用" title="收藏常用">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-star"/></svg>
+      </button>`;
+
     return `
       <div class="${baseCardClass} ${frostedClass} ${cardStyleClass} card-anim-enter" data-id="${site.id}">
         <div class="site-card-content">
@@ -91,6 +97,7 @@ export function renderSiteCards(sites, settings) {
             ${descHtml}
           </a>
           ${linksHtml}
+          ${favBtnHtml}
         </div>
       </div>`;
   }).join('');

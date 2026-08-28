@@ -46,8 +46,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }, { once: true });
   });
 
-  // ========== 复制链接功能 ==========
+  // ========== 复制链接 & 常用收藏（卡片事件委托） ==========
   sitesGrid?.addEventListener('click', function (e) {
+    // 星标切换：写入 localStorage，纯本地常用收藏，无需后端
+    const favBtn = e.target.closest('.fav-btn');
+    if (favBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = favBtn.getAttribute('data-fav-id');
+      if (!id) return;
+      const nowFaved = toggleFavorite(id);
+      applyFavoriteStates();
+      showToast(nowFaved ? '已加入常用' : '已取消常用');
+      return;
+    }
+
     const btn = e.target.closest('.copy-btn');
     if (!btn) return;
 
@@ -294,7 +307,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const s = sitesById.get(String(id)) || {};
       const text = [s.name, s.url, s.catelog_name || '未分类', s.desc]
         .map(v => (v || '').toLowerCase()).join('\0');
-      return { el: card, text };
+      return { el: card, text, site: s };
     });
     return searchCardCache;
   }
@@ -374,18 +387,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = setTimeout(() => {
-        const keyword = value.toLowerCase().trim();
-        const cached = getSearchCardCache();
-
-        cached.forEach(({ el, text }) => {
-          if (keyword === '' || text.includes(keyword)) {
-            el.classList.remove('hidden');
-          } else {
-            el.classList.add('hidden');
-          }
-        });
-
-        updateHeading(keyword);
+        applyCardFilters(value.toLowerCase().trim());
       }, 200);
     });
 
@@ -442,6 +444,148 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // 初次加载时根据屏幕宽度修正标题显示
   updateHeading();
+
+  // ========== 本地过滤统一入口（关键词 + 常用收藏 组合过滤 + 关键词高亮） ==========
+  let currentKeyword = '';
+  let favOnly = false;
+
+  function applyCardFilters(keyword) {
+    currentKeyword = keyword || '';
+    const cached = getSearchCardCache();
+    let visible = 0;
+
+    cached.forEach(({ el, text, site }) => {
+      const matchKeyword = currentKeyword === '' || text.includes(currentKeyword);
+      const matchFav = !favOnly || isFavorite(el.getAttribute('data-id'));
+      const show = matchKeyword && matchFav;
+      el.classList.toggle('hidden', !show);
+      if (show) visible++;
+      if (currentKeyword && site && site.name) {
+        applyHighlight(el, site, currentKeyword);
+      } else {
+        clearHighlight(el);
+      }
+    });
+
+    updateHeading(currentKeyword, undefined, visible);
+  }
+
+  // --- 关键词高亮：仅重建 title/desc 两个纯文本节点，原文与转义逻辑不变 ---
+  function highlightIn(el, rawText, keyword) {
+    if (!el) return;
+    if (el.dataset.origText === undefined) el.dataset.origText = el.textContent;
+    const raw = String(rawText || '');
+    const idx = raw.toLowerCase().indexOf(keyword);
+    if (idx === -1) {
+      el.textContent = el.dataset.origText;
+      return;
+    }
+    el.textContent = '';
+    if (idx > 0) el.appendChild(document.createTextNode(raw.slice(0, idx)));
+    const mark = document.createElement('mark');
+    mark.className = 'search-hit';
+    mark.textContent = raw.slice(idx, idx + keyword.length);
+    el.appendChild(mark);
+    if (idx + keyword.length < raw.length) el.appendChild(document.createTextNode(raw.slice(idx + keyword.length)));
+  }
+
+  function applyHighlight(card, site, keyword) {
+    highlightIn(card.querySelector('.site-title'), site.name, keyword);
+    highlightIn(card.querySelector('p'), site.desc || '', keyword);
+  }
+
+  function clearHighlight(card) {
+    const els = [card.querySelector('.site-title'), card.querySelector('p')];
+    els.forEach(el => {
+      if (el && el.dataset.origText !== undefined) {
+        el.textContent = el.dataset.origText;
+        delete el.dataset.origText;
+      }
+    });
+  }
+
+  // ========== 常用收藏（本地星标，localStorage 存储，无后端依赖） ==========
+  const FAV_KEY = 'iori_favorites';
+  const favFilterBtn = document.getElementById('favFilterBtn');
+  const favCountEl = document.getElementById('favCount');
+
+  function getFavorites() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(FAV_KEY) || '[]');
+      return Array.isArray(raw) ? raw.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveFavorites(list) {
+    try {
+      localStorage.setItem(FAV_KEY, JSON.stringify(list));
+    } catch { /* 隐私模式等场景下静默失败 */ }
+  }
+
+  function isFavorite(id) {
+    return getFavorites().includes(String(id));
+  }
+
+  function toggleFavorite(id) {
+    const list = getFavorites();
+    const sid = String(id);
+    const idx = list.indexOf(sid);
+    if (idx >= 0) list.splice(idx, 1);
+    else list.push(sid);
+    saveFavorites(list);
+    return idx < 0;
+  }
+
+  // 将 localStorage 中的星标状态同步到当前 DOM 中的卡片（SSR 与客户端渲染通用）
+  function applyFavoriteStates() {
+    const favs = new Set(getFavorites());
+    sitesGrid?.querySelectorAll('.site-card').forEach(card => {
+      const faved = favs.has(card.getAttribute('data-id'));
+      card.classList.toggle('faved', faved);
+      const btn = card.querySelector('.fav-btn');
+      if (btn) {
+        btn.classList.toggle('faved', faved);
+        btn.setAttribute('aria-pressed', faved ? 'true' : 'false');
+        // 切换实心/线性星（sprite symbol）
+        const use = btn.querySelector('use');
+        if (use) use.setAttribute('href', faved ? '#icon-star-solid' : '#icon-star');
+      }
+    });
+    updateFavChip(favs.size);
+  }
+
+  function updateFavChip(count) {
+    const n = (count !== undefined) ? count : getFavorites().length;
+    if (!favFilterBtn) return;
+
+    if (n > 0) {
+      favFilterBtn.classList.remove('hidden');
+      favFilterBtn.classList.add('flex');
+    } else {
+      favFilterBtn.classList.add('hidden');
+      favFilterBtn.classList.remove('flex');
+      // 最后一个星标被取消时自动退出「只看常用」模式
+      if (favOnly) {
+        favOnly = false;
+        favFilterBtn.setAttribute('aria-pressed', 'false');
+        favFilterBtn.classList.remove('fav-filter-active');
+        applyCardFilters(currentKeyword);
+      }
+    }
+    if (favCountEl) favCountEl.textContent = n > 0 ? String(n) : '';
+  }
+
+  favFilterBtn?.addEventListener('click', () => {
+    favOnly = !favOnly;
+    favFilterBtn.setAttribute('aria-pressed', favOnly ? 'true' : 'false');
+    favFilterBtn.classList.toggle('fav-filter-active', favOnly);
+    applyCardFilters(currentKeyword);
+  });
+
+  // 初始加载：同步星标状态 + 显示常用入口
+  applyFavoriteStates();
 
   // ========== 一言 API ==========
   const hitokotoContainer = document.querySelector('#hitokoto')?.parentElement;
@@ -685,8 +829,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const sitesGrid = document.getElementById('sitesGrid');
     if (!sitesGrid) return;
 
-    // 重新渲染时清除搜索缓存
+    // 重新渲染时清除搜索缓存，并重置搜索关键词状态（分类切换后输入框与卡片保持一致）
     searchCardCache = null;
+    searchInputs.forEach(input => { input.value = ''; });
+    currentKeyword = '';
 
     // 使用全局配置获取布局设置，避免依赖 DOM 推断
     const config = window.IORI_LAYOUT_CONFIG || {};
@@ -743,8 +889,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const frostedClass = isFrostedEnabled ? 'frosted-glass-effect' : '';
       const cardStyleClass = cardStyle === 'style2' ? 'style-2' : '';
       const baseCardClass = isFrostedEnabled
-        ? 'site-card group overflow-hidden transition-all'
-        : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-700';
+        ? 'site-card group relative overflow-hidden transition-all'
+        : 'site-card group relative bg-white border border-primary-100/60 shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-700';
 
       const card = document.createElement('div');
       card.className = `${baseCardClass} ${frostedClass} ${cardStyleClass} card-anim-enter`;
@@ -762,6 +908,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
       card.setAttribute('data-id', site.id);
 
+      const favBtnHtml = `
+          <button type="button" class="fav-btn" data-fav-id="${escapeHTML(String(site.id))}" aria-pressed="false" aria-label="收藏常用" title="收藏常用">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-star"/></svg>
+          </button>`;
+
       card.innerHTML = `
         <div class="site-card-content">
           <a href="${safeUrl || '#'}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
@@ -777,11 +928,15 @@ document.addEventListener('DOMContentLoaded', function () {
             ${descHtml}
           </a>
           ${linksHtml}
+          ${favBtnHtml}
         </div>
         `;
 
       sitesGrid.appendChild(card);
     });
+
+    // 客户端渲染的卡片同样回填星标状态（含常用芯片计数）
+    applyFavoriteStates();
   }
 
   function updateNavigationState(catalogId) {
@@ -989,6 +1144,61 @@ document.addEventListener('DOMContentLoaded', function () {
       transition.finished.finally(() => {
         document.documentElement.classList.remove('theme-animating');
       });
+    });
+  }
+
+  // ========== 键盘快捷键 ==========
+  document.addEventListener('keydown', (e) => {
+    const target = e.target;
+    const isTyping = target && (
+      target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' || target.isContentEditable
+    );
+
+    // `/` 或 Ctrl/⌘+K：聚焦搜索框（输入状态下的 / 不劫持；优先取当前可见的输入框，
+    // 因为 horizontal 布局下移动端 vertical 头部是 display:none 但仍在 DOM 中）
+    if ((e.key === '/' && !isTyping) || ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K'))) {
+      const input = Array.from(searchInputs).find(el => el.getClientRects().length > 0) || searchInputs[0];
+      if (input) {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+      return;
+    }
+
+    // Esc：关闭投稿模态框 > 清空搜索并退出输入焦点
+    if (e.key === 'Escape') {
+      if (addSiteModal && !addSiteModal.classList.contains('invisible')) {
+        closeModal();
+        return;
+      }
+      const active = document.activeElement;
+      const focusedSearch = Boolean(active && active.classList && active.classList.contains('search-input-target'));
+      if (focusedSearch || currentKeyword) {
+        searchInputs.forEach(input => { input.value = ''; });
+        applyCardFilters('');
+        if (focusedSearch) active.blur();
+      }
+    }
+  });
+
+  // ========== 系统主题跟随（用户未手动选择过主题时生效） ==========
+  const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  const onSystemThemeChange = (e) => {
+    if (localStorage.getItem('theme') !== null) return;
+    document.documentElement.classList.toggle('dark', e.matches);
+  };
+  if (themeMedia.addEventListener) {
+    themeMedia.addEventListener('change', onSystemThemeChange);
+  } else if (themeMedia.addListener) {
+    themeMedia.addListener(onSystemThemeChange); // 旧版 Safari
+  }
+
+  // ========== PWA Service Worker 注册（生产 HTTPS 或本地开发） ==========
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => { /* 注册失败不影响正常浏览 */ });
     });
   }
 

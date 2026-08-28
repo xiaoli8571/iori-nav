@@ -6,6 +6,7 @@ import { getSettingsKeys, parseSettings } from './lib/settings-parser';
 import { renderHorizontalMenu, renderVerticalMenu } from './lib/menu-renderer';
 import { renderSiteCards, renderEmptyState } from './lib/card-renderer';
 import { ensureSchemaReady } from './lib/schema-migration';
+import { buildJsonLd } from './lib/seo';
 
 // 模板内容在 Worker 运行时实例生命周期内不变（部署会替换实例），缓存避免每次 MISS 重复 ASSETS.fetch
 let cachedTemplateHtml = null;
@@ -269,8 +270,9 @@ export async function onRequest(context) {
       <div class="relative max-w-xl mx-auto">
         ${searchEngineOptions}
         <div class="relative">
-          <input type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-4 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off">
+          <input type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-14 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off" enterkeyhint="search">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-4 top-3.5 ${searchIconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <kbd class="search-kbd" aria-hidden="true">/</kbd>
         </div>
       </div>
     </div>`;
@@ -281,8 +283,9 @@ export async function onRequest(context) {
       <div class="relative max-w-xl mx-auto mb-8">
         ${searchEngineOptions}
         <div class="relative">
-          <input id="headerSearchInput" type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-4 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off">
+          <input id="headerSearchInput" type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-14 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off" enterkeyhint="search">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-4 top-3.5 ${searchIconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <kbd class="search-kbd" aria-hidden="true">/</kbd>
         </div>
       </div>
       <div class="relative max-w-5xl mx-auto">
@@ -402,6 +405,16 @@ export async function onRequest(context) {
   const cardRadius = parseInt(S.layout_card_border_radius) || 12;
   const frostedBlur = String(S.layout_frosted_glass_intensity || '15').replace(/[^0-9]/g, '') || '15';
   headInjections += `<style>:root { --card-padding: 1.25rem; --card-radius: ${cardRadius}px; --frosted-glass-blur: ${frostedBlur}px; }</style>`;
+
+  // PWA / SEO / 预连接注入
+  headInjections += `<link rel="manifest" href="/manifest.webmanifest">`;
+  headInjections += `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#254267">`;
+  headInjections += `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111827">`;
+  headInjections += `<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">`;
+  // 一言 API 预连接（默认启用时才注入）
+  if (!S.home_hide_hitokoto) headInjections += `<link rel="preconnect" href="https://v1.hitokoto.cn" crossorigin>`;
+  // JSON-LD 结构化数据（WebSite）
+  headInjections += `<script type="application/ld+json">${buildJsonLd(siteName, siteDescription, url.origin)}</script>`;
 
   // 自定义字体
   const usedFonts = new Set();
