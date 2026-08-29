@@ -185,6 +185,62 @@ export function buildFaviconUrl(siteUrl, currentLogo, iconAPI) {
 }
 
 /**
+ * 已知第三方 favicon 服务域名后缀——这些直链质量差（对大量站点返回
+ * 1×1 透明图/地球球标），渲染时统一重写到本站多源代理 /favicon?url=
+ */
+const KNOWN_FAVICON_HOST_SUFFIXES = [
+    'faviconsnap.com',
+    'favicon.im',
+    'icons.duckduckgo.com',
+    'gstatic.com',      // google s2 走 *.gstatic.com
+    'google.com',       // google s2 也可能走 www.google.com
+    'googleusercontent.com',
+];
+
+/**
+ * 渲染端卡片 logo 解析：决定 <img src> 与 onerror 二级兜底 data-fallback
+ *
+ * - 站点 URL 无效：返回空 src（卡片退回首字母占位块）
+ * - logo 为空，或 logo 指向已知 favicon 服务：src = 本站代理 /favicon?url=<域名>
+ *   （代理内部依次尝试多个源，最终兜底首字母 SVG，卡片永不空白）
+ * - 其他（用户自定义直链）：src 原样保留，data-fallback = 本站代理，
+ *   直链 404 时 onerror 自动切换到代理，无需改库即可修复存量坏数据
+ *
+ * @param {string} siteUrl - 书签站点 URL
+ * @param {string|null} logo - 存库 logo（可能为 faviconsnap 直链 / 自定义直链 / 空）
+ * @returns {{src: string, fallback: string}}
+ */
+export function resolveCardLogoUrl(siteUrl, logo) {
+    // 站点域名提取（与 buildFaviconUrl 同样用 hostname 忽略端口）
+    let domain = '';
+    if (siteUrl && /^https?:\/\//i.test(siteUrl)) {
+        try {
+            const host = new URL(siteUrl).hostname.toLowerCase();
+            if (host.includes('.') && host.length <= 253) domain = host;
+        } catch { /* 无效 URL：domain 保持空 */ }
+    }
+    if (!domain) return { src: '', fallback: '' };
+
+    const proxyUrl = `/favicon?url=${encodeURIComponent(domain)}`;
+
+    const trimmed = String(logo || '').trim();
+    if (trimmed && !trimmed.startsWith('data:image')) {
+        const safeLogo = sanitizeUrl(trimmed);
+        if (safeLogo) {
+            // 已知 favicon 服务直链 → 重写到本站代理（多源更稳）
+            let logoHost = '';
+            try { logoHost = new URL(safeLogo).hostname.toLowerCase(); } catch { /* 不可达 */ }
+            const isKnownFaviconService = KNOWN_FAVICON_HOST_SUFFIXES.some(s => logoHost === s || logoHost.endsWith('.' + s));
+            if (isKnownFaviconService) return { src: proxyUrl, fallback: '' };
+            // 用户自定义直链 → 原样输出，失败时 onerror 自动切到代理
+            return { src: safeLogo, fallback: proxyUrl };
+        }
+    }
+    // 无 logo（或仅 data: 被清洗）：走本站代理自动补全
+    return { src: proxyUrl, fallback: '' };
+}
+
+/**
  * 构建 style 属性字符串（字体名通过 FONT_MAP 白名单校验）
  * @returns {string} 如 'style="font-size: 16px; color: red;"' 或空字符串
  */

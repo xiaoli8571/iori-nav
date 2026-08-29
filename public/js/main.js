@@ -872,14 +872,16 @@ document.addEventListener('DOMContentLoaded', function () {
       const safeDesc = escapeHTML(site.desc || '暂无描述');
       const safeCatalog = escapeHTML(site.catelog_name || site.catelog || '未分类');
       const safeDisplayUrl = escapeHTML(normalizedUrl || '未提供链接');
-      const logoUrl = sanitizeHttpUrl(site.logo);
       const cardInitial = escapeHTML((rawName.trim().charAt(0) || '站').toUpperCase());
       const cardInitialJs = (() => { const c = (rawName.trim().charAt(0) || '站').toUpperCase(); return /[A-Za-z0-9\u4e00-\u9fff]/.test(c) ? c : '站'; })();
 
       const isAboveFold = index < 8;
       const imgLoadingAttrs = isAboveFold ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"';
-      const logoHtml = logoUrl
-        ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" ${imgLoadingAttrs} onerror="iconFallback(this,'${cardInitialJs}')">`
+      // logo 二级兜底：src 失败 → onerror 换 data-fallback(本站代理)；代理也失败 → 字母块
+      const logoInfo = resolveCardLogo(site, site.url);
+      const logoFallbackAttr = logoInfo.fallback ? ` data-fallback="${escapeHTML(logoInfo.fallback)}"` : '';
+      const logoHtml = logoInfo.src
+        ? `<img src="${escapeHTML(logoInfo.src)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700"${logoFallbackAttr} ${imgLoadingAttrs} onerror="iconFallback(this,'${cardInitialJs}')">`
         : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`;
 
       const descHtml = hideDesc ? '' : `<p class="mt-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2" title="${safeDesc}">${safeDesc}</p>`;
@@ -1063,6 +1065,35 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch {
       return '';
     }
+  }
+
+  // 与服务端 resolveCardLogoUrl 同逻辑（浏览器端独立实现）：
+  // 空 logo / 第三方 favicon 服务直链 → 本站多源代理；用户自定义直链保留并挂二级兜底
+  const KNOWN_FAVICON_HOST_SUFFIXES = ['faviconsnap.com', 'favicon.im', 'icons.duckduckgo.com', 'gstatic.com', 'googleusercontent.com'];
+
+  function resolveCardLogo(site, siteUrl) {
+    let domain = '';
+    if (siteUrl && /^https?:\/\//i.test(siteUrl)) {
+      try {
+        const host = new URL(siteUrl).hostname.toLowerCase();
+        if (host.includes('.') && host.length <= 253) domain = host;
+      } catch { /* 无效 URL */ }
+    }
+    if (!domain) return { src: '', fallback: '' };
+
+    const proxyUrl = '/favicon?url=' + encodeURIComponent(domain);
+    const trimmed = String(site.logo || '').trim();
+    if (trimmed && !trimmed.startsWith('data:image')) {
+      const safeLogo = sanitizeHttpUrl(trimmed);
+      if (safeLogo) {
+        let logoHost = '';
+        try { logoHost = new URL(safeLogo).hostname.toLowerCase(); } catch { /* 不可达 */ }
+        const known = KNOWN_FAVICON_HOST_SUFFIXES.some(s => logoHost === s || logoHost.endsWith('.' + s));
+        if (known) return { src: proxyUrl, fallback: '' };
+        return { src: safeLogo, fallback: proxyUrl };
+      }
+    }
+    return { src: proxyUrl, fallback: '' };
   }
 
   // Auto-restore Last Category

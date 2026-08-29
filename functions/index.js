@@ -454,8 +454,9 @@ export async function onRequest(context) {
   }
   if (fontLinksHtml) headInjections += fontLinksHtml;
 
-  // 图标加载失败兜底：卡片 <img onerror> 调用，替换为首字母占位块（用 textContent 防注入）
-  headInjections += `<script>window.iconFallback=function(el,l){var d=document.createElement('div');d.className='w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner';d.textContent=l;el.replaceWith(d);};</script>`;
+  // 图标加载失败兜底：卡片 <img onerror> 调用。
+  // 二级链：img 带 data-fallback(本站 /favicon 代理) 时先切换到代理；代理也失败才替换为字母占位块（textContent 防注入）
+  headInjections += `<script>window.iconFallback=function(el,l){var fb=el.getAttribute&&el.getAttribute('data-fallback');if(fb){el.removeAttribute('data-fallback');el.src=fb;return;}var d=document.createElement('div');d.className='w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner';d.textContent=l||'?';el.replaceWith(d);};</script>`;
 
   // 卡片自定义字体 CSS
   let customCardCss = '';

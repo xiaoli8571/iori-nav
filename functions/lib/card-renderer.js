@@ -1,7 +1,7 @@
 // functions/lib/card-renderer.js
 // 渲染站点卡片网格 HTML
 
-import { escapeHTML, sanitizeUrl } from './utils';
+import { escapeHTML, sanitizeUrl, resolveCardLogoUrl } from './utils';
 
 /**
  * 渲染站点卡片网格 HTML
@@ -31,6 +31,8 @@ export function renderSiteCards(sites, settings) {
   const processed = sites.map(site => {
     const rawName = site.name || '未命名';
     const normalizedUrl = sanitizeUrl(site.url);
+    // logo 解析：空/第三方 favicon 直链 → 本站多源代理；自定义直链保留并挂二级兜底
+    const logoInfo = resolveCardLogoUrl(site.url, site.logo);
     return {
       site,
       safeName: escapeHTML(rawName),
@@ -39,7 +41,8 @@ export function renderSiteCards(sites, settings) {
       normalizedUrl,
       safeUrl: escapeHTML(normalizedUrl),
       safeDisplayUrl: normalizedUrl || '未提供链接',
-      logoUrl: sanitizeUrl(site.logo),
+      logoSrc: logoInfo.src,
+      logoFallback: logoInfo.fallback,
       cardInitial: escapeHTML((rawName.trim().charAt(0) || '站').toUpperCase()),
       // onerror 内嵌 JS 字符串上下文使用的首字母：仅保留安全字符，避免引号破坏属性
       cardInitialJs: (() => {
@@ -50,7 +53,7 @@ export function renderSiteCards(sites, settings) {
     };
   });
 
-  return processed.map(({ site, safeName, safeCatalog, safeDesc, normalizedUrl, safeUrl, safeDisplayUrl, logoUrl, cardInitial, cardInitialJs, hasValidUrl }, index) => {
+  return processed.map(({ site, safeName, safeCatalog, safeDesc, normalizedUrl, safeUrl, safeDisplayUrl, logoSrc, logoFallback, cardInitial, cardInitialJs, hasValidUrl }, index) => {
     // 首屏（约前 8 张）logo 用 eager + fetchpriority=high 改善 LCP；其余 lazy
     const isAboveFold = index < 8;
     const imgLoadingAttrs = isAboveFold ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"';
@@ -78,16 +81,19 @@ export function renderSiteCards(sites, settings) {
         <svg class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-star"/></svg>
       </button>`;
 
+    // logo 二级兜底：src 失败 → onerror 换 data-fallback(本站代理)；代理也失败 → 字母块
+    const logoFallbackAttr = logoFallback ? ` data-fallback="${escapeHTML(logoFallback)}"` : '';
+    const logoHtml = logoSrc
+      ? `<img src="${escapeHTML(logoSrc)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700"${logoFallbackAttr} ${imgLoadingAttrs} onerror="iconFallback(this,'${cardInitialJs}')">`
+      : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`;
+
     return `
       <div class="${baseCardClass} ${frostedClass} ${cardStyleClass} card-anim-enter" data-id="${site.id}">
         <div class="site-card-content">
           <a href="${safeUrl || '#'}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
             <div class="flex items-start">
               <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
-                ${logoUrl
-        ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" width="40" height="40" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" ${imgLoadingAttrs} onerror="iconFallback(this,'${cardInitialJs}')">`
-        : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
-      }
+                ${logoHtml}
               </div>
               <div class="flex-1 min-w-0">
                 <h3 class="site-title text-base font-medium text-gray-900 dark:text-gray-100 truncate transition-all duration-300 origin-left" title="${safeName}">${safeName}</h3>
