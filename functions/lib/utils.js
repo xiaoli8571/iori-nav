@@ -198,6 +198,22 @@ const KNOWN_FAVICON_HOST_SUFFIXES = [
 ];
 
 /**
+ * 从代理 URL 的 url 参数中提取纯域名（仅 http(s)/裸域名，复用与代理一致的基本校验）
+ */
+function extractProxyDomain(raw) {
+    const input = String(raw || '').trim();
+    if (!input || input.length > 253) return '';
+    let candidate = input;
+    if (!/^https?:\/\//i.test(candidate)) candidate = 'http://' + candidate;
+    try {
+        const host = new URL(candidate).hostname.toLowerCase();
+        return (host.includes('.') && host.length <= 253) ? host : '';
+    } catch {
+        return '';
+    }
+}
+
+/**
  * 渲染端卡片 logo 解析：决定 <img src> 与 onerror 二级兜底 data-fallback
  *
  * - 站点 URL 无效：返回空 src（卡片退回首字母占位块）
@@ -228,8 +244,20 @@ export function resolveCardLogoUrl(siteUrl, logo) {
         const safeLogo = sanitizeUrl(trimmed);
         if (safeLogo) {
             // 已知 favicon 服务直链 → 重写到本站代理（多源更稳）
-            let logoHost = '';
-            try { logoHost = new URL(safeLogo).hostname.toLowerCase(); } catch { /* 不可达 */ }
+            let logoHost = '', logoPath = '', parsed = null;
+            try {
+                parsed = new URL(safeLogo);
+                logoHost = parsed.hostname.toLowerCase();
+                logoPath = parsed.pathname;
+            } catch { /* 不可达 */ }
+            // 本站代理的绝对 URL 形式（ICON_API 指向本站时存库的值）→ 统一为相对路径，
+            // 并保留其原有 url 参数（图标真正对应的域名）
+            if (logoPath === '/favicon') {
+                const inner = (parsed.searchParams.get('url') || '').trim();
+                const innerDomain = extractProxyDomain(inner);
+                if (innerDomain) return { src: `/favicon?url=${encodeURIComponent(innerDomain)}`, fallback: '' };
+                return { src: proxyUrl, fallback: '' };
+            }
             const isKnownFaviconService = KNOWN_FAVICON_HOST_SUFFIXES.some(s => logoHost === s || logoHost.endsWith('.' + s));
             if (isKnownFaviconService) return { src: proxyUrl, fallback: '' };
             // 用户自定义直链 → 原样输出，失败时 onerror 自动切到代理

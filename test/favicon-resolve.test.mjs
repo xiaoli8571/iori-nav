@@ -19,6 +19,11 @@ test('resolveCardLogoUrl: 已知 favicon 服务直链 → 重写为本站代理'
   // 带 www / 子域也能识别
   assert.equal(resolveCardLogoUrl('https://example.com', 'https://www.faviconsnap.com/x').src, proxyFor('example.com'));
   assert.equal(resolveCardLogoUrl('https://example.com', 'https://icons.duckduckgo.com/ip3/example.com.ico').src, proxyFor('example.com'));
+  // 本站代理的绝对 URL 形式（ICON_API 指向本站存库的值）→ 统一为相对路径
+  assert.equal(
+    resolveCardLogoUrl('https://example.com', 'https://n.720820.xyz/favicon?url=app.notion.com').src,
+    proxyFor('app.notion.com')
+  );
 });
 
 test('resolveCardLogoUrl: 用户自定义直链 → 原样保留并挂二级兜底', () => {

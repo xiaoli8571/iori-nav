@@ -1086,8 +1086,28 @@ document.addEventListener('DOMContentLoaded', function () {
     if (trimmed && !trimmed.startsWith('data:image')) {
       const safeLogo = sanitizeHttpUrl(trimmed);
       if (safeLogo) {
-        let logoHost = '';
-        try { logoHost = new URL(safeLogo).hostname.toLowerCase(); } catch { /* 不可达 */ }
+        let logoHost = '', logoPath = '';
+        try {
+          const parsed = new URL(safeLogo);
+          logoHost = parsed.hostname.toLowerCase();
+          logoPath = parsed.pathname;
+        } catch { /* 不可达 */ }
+        // 本站代理的绝对 URL 形式（ICON_API 指向本站时存库的值）→ 统一为相对路径，
+        // 并保留其原有 url 参数（图标真正对应的域名）
+        if (logoPath === '/favicon') {
+          const inner = (parsed.searchParams.get('url') || '').trim();
+          let innerDomain = '';
+          if (inner && inner.length <= 253) {
+            let candidate = inner;
+            if (!/^https?:\/\//i.test(candidate)) candidate = 'http://' + candidate;
+            try {
+              const h = new URL(candidate).hostname.toLowerCase();
+              if (h.includes('.') && h.length <= 253) innerDomain = h;
+            } catch { /* 忽略 */ }
+          }
+          if (innerDomain) return { src: '/favicon?url=' + encodeURIComponent(innerDomain), fallback: '' };
+          return { src: proxyUrl, fallback: '' };
+        }
         const known = KNOWN_FAVICON_HOST_SUFFIXES.some(s => logoHost === s || logoHost.endsWith('.' + s));
         if (known) return { src: proxyUrl, fallback: '' };
         return { src: safeLogo, fallback: proxyUrl };
