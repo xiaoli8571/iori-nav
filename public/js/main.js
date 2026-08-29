@@ -114,6 +114,15 @@ document.addEventListener('DOMContentLoaded', function () {
       } else {
         backToTop?.classList.add('opacity-0', 'invisible');
       }
+      // 返回顶部按钮的滚动进度环（CSS conic-gradient 消费 --scroll-progress）
+      if (backToTop) {
+        const max = appScroll
+          ? appScroll.scrollHeight - appScroll.clientHeight
+          : document.documentElement.scrollHeight - window.innerHeight;
+        const pct = max > 0 ? Math.min(100, (top / max) * 100) : 0;
+        backToTop.style.setProperty('--scroll-progress', pct.toFixed(2));
+        backToTop.classList.toggle('progress-live', pct > 2);
+      }
       scrollTicking = false;
     });
   };
@@ -591,6 +600,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const hitokotoContainer = document.querySelector('#hitokoto')?.parentElement;
   // 检查容器是否被隐藏，如果隐藏则不发起请求
   if (hitokotoContainer && !hitokotoContainer.classList.contains('hidden')) {
+    const hitokotoEl = document.getElementById('hitokoto');
     fetch('https://v1.hitokoto.cn', { signal: AbortSignal.timeout(3000) })
       .then(res => res.json())
       .then(data => {
@@ -598,9 +608,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (hitokoto) {
           hitokoto.href = `https://hitokoto.cn/?uuid=${data.uuid}`;
           hitokoto.innerText = data.hitokoto;
+          // 淡入新句子（CSS 过渡）
+          hitokotoEl?.classList.remove('hitokoto-loading');
         }
       })
-      .catch(console.error);
+      .catch(() => { hitokotoEl?.classList.remove('hitokoto-loading'); });
+    // 先淡出占位文案
+    hitokotoEl?.classList.add('hitokoto-loading');
   }
 
   // ========== Horizontal Menu Overflow Logic ==========
