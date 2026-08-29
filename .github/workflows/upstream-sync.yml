@@ -1,11 +1,14 @@
-name: 自动同步上游仓库
+name: 手动同步上游仓库（已禁用每日自动同步）
+
+# ⚠️ 本仓库的 custom-nav 分支为生产部署分支（Cloudflare Pages 绑定），包含本地定制代码。
+# 自动同步上游会用原项目代码覆盖 master，因此已移除 schedule 触发。
+# 如需跟进上游更新：GitHub → Actions →「手动同步上游仓库」→ Run workflow
+# （仅合并到 master，不影响线上部署分支 custom-nav）。
 
 permissions:
   contents: write
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # every day
   workflow_dispatch:
 
 jobs:
