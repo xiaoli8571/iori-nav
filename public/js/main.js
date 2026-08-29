@@ -1086,15 +1086,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (trimmed && !trimmed.startsWith('data:image')) {
       const safeLogo = sanitizeHttpUrl(trimmed);
       if (safeLogo) {
-        let logoHost = '', logoPath = '';
+        let logoHost = '', logoPath = '', parsed = null;
         try {
-          const parsed = new URL(safeLogo);
+          parsed = new URL(safeLogo);
           logoHost = parsed.hostname.toLowerCase();
           logoPath = parsed.pathname;
         } catch { /* 不可达 */ }
         // 本站代理的绝对 URL 形式（ICON_API 指向本站时存库的值）→ 统一为相对路径，
         // 并保留其原有 url 参数（图标真正对应的域名）
-        if (logoPath === '/favicon') {
+        if (logoPath === '/favicon' && parsed) {
           const inner = (parsed.searchParams.get('url') || '').trim();
           let innerDomain = '';
           if (inner && inner.length <= 253) {

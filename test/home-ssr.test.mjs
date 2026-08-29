@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { onRequest } from '../functions/index.js';
+import { HOME_CACHE_VERSION } from '../functions/constants.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const templateHtml = readFileSync(join(root, 'public/index.html'), 'utf8');
@@ -106,7 +107,7 @@ test('home SSR caches html under v9 key and follows system theme script', async 
   const html = await onRequest(ctx).then(r => r.text());
   await ctx._drain();
 
-  const cached = env.NAV_AUTH.store.get('home_html_public_v9');
+  const cached = env.NAV_AUTH.store.get(`home_html_public_${HOME_CACHE_VERSION}`);
   assert.ok(cached, 'home html cached under v9 key');
   assert.match(cached, /rel="manifest"/);
   // FOUC 脚本包含系统偏好判断
